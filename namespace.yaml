@@ -1,0 +1,113 @@
+#1. Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ramirez
+---
+#3. ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: personal-info
+  namespace: ramirez
+data:
+  Nombres: "Lucio Jesus"
+  Apellidos: "Ramirez Gamarra"
+  Edad: "40"
+---
+#4. Secret
+apiVersion: v1
+kind: Secret
+metadata:
+  name: secret-word
+  namespace: ramirez
+type: Opaque
+data:
+  palabra: T1JRVUVTVEFET1JFUw==  # Base64 de "ORQUESTADORES" https://www.base64encode.org/
+---
+#5. PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nginx-log-pv
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /mnt/data
+  persistentVolumeReclaimPolicy: Retain
+---
+# PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nginx-log-pvc
+  namespace: ramirez
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+#2. Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: ramirez
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      labels:
+        app: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        env:
+        - name: NOMBRES
+          valueFrom:
+            configMapKeyRef:
+              name: personal-info
+              key: Nombres
+        - name: APELLIDOS
+          valueFrom:
+            configMapKeyRef:
+              name: personal-info
+              key: Apellidos
+        - name: SECRET_WORD
+          valueFrom:
+            secretKeyRef:
+              name: secret-word
+              key: palabra
+        volumeMounts:
+        - name: log-volume
+          mountPath: /var/log/nginx   #minikube mount H:\GitHub\DevOps\25-11-2024\Kubernettes\Ejercicio01\Data:/mnt/data
+      volumes:
+      - name: log-volume
+        persistentVolumeClaim:
+          claimName: nginx-log-pvc
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+  namespace: ramirez
+spec:
+  selector:
+    app: nginx
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: NodePort
